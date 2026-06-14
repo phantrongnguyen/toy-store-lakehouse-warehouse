@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # 1. Cơ sở dữ liệu nguồn PostgreSQL (chứa dữ liệu giao dịch Toy Store)
+  postgres-source:
+    image: postgres:15-alpine
+    container_name: postgres_source_db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=nguyen
+      - POSTGRES_DB=toy_store_db
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: always
+
+  # 2. Apache Airflow (Bộ điều phối & xử lý ETL Pipeline)
+  airflow-app:
+    build: .
+    container_name: airflow_app_container
+    ports:
+      - "8080:8080"
+    environment:
+      # Biến kết nối tới PostgreSQL (Lưu ý: DB_HOST dùng tên service 'postgres-source')
+      - DB_USER=postgres
+      - DB_PASSWORD=nguyen
+      - DB_HOST=postgres-source
+      - DB_PORT=5432
+      - DB_NAME=toy_store_db
+      # Thiết lập thư mục chứa các DAGs của Airflow
+      - AIRFLOW__CORE__DAGS_FOLDER=/app/dags
+      # Cho phép nạp DAG mẫu của Airflow hay không (False để giữ giao diện sạch)
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    volumes:
+      # Gắn kết (Mount) các thư mục code cục bộ vào container để tiện phát triển
+      - ./dags:/app/dags
+      - ./etls:/app/etls
+      - ./utils:/app/utils
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - postgres-source
+    restart: always
+
+  # 3. Metabase (Trực quan hóa dữ liệu và xây dựng Dashboard)
+  metabase:
+    image: metabase/metabase:latest
+    container_name: metabase_container
+    ports:
+      - "3000:3000"
+    volumes:
+      - metabase_data:/metabase-data
+    depends_on:
+      - postgres-source
+    restart: always
+
+volumes:
+  pg_data:
+  metabase_data:
