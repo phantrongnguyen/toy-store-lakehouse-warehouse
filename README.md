@@ -1,6 +1,8 @@
 # Toy Store End-to-End Data Lakehouse Pipeline
 
-Dự án này xây dựng một hệ thống **Data Lakehouse** hoàn chỉnh (End-to-End) phục vụ việc phân tích dữ liệu cho cửa hàng đồ chơi (**Toy Store**). Hệ thống tự động thu thập dữ liệu từ cơ sở dữ liệu giao dịch PostgreSQL (OLTP), lưu trữ dưới dạng hồ dữ liệu cục bộ (Local Data Lake) theo kiến trúc Medallion (Bronze -> Silver -> Gold), và phân tích/biến đổi dữ liệu thông qua DuckDB và Apache Airflow.
+Dự án này xây dựng một hệ thống **Data Lakehouse** hoàn chỉnh (End-to-End) phục vụ việc phân tích dữ liệu cho cửa hàng đồ chơi (**Toy Store**). 
+
+Hệ thống tự động thu thập dữ liệu từ cơ sở dữ liệu giao dịch PostgreSQL (OLTP), lưu trữ dưới dạng hồ dữ liệu cục bộ (Local Data Lake) theo kiến trúc Medallion (Bronze -> Silver -> Gold), thực hiện các phép biến đổi SQL hiệu năng cao qua **DuckDB**, tự động điều phối qua **Apache Airflow**, và cuối cùng nạp ngược lại dữ liệu đã tổng hợp về PostgreSQL (Reverse ETL) để phục vụ trực quan hóa trên **Metabase**.
 
 ---
 
@@ -8,18 +10,40 @@ Dự án này xây dựng một hệ thống **Data Lakehouse** hoàn chỉnh (E
 
 ```mermaid
 graph TD
-    A[PostgreSQL - OLTP Source] -->|Extract / Airflow DAG| B(Bronze Zone: Raw Parquet)
-    B -->|Clean & Transform / DuckDB| C(Silver Zone: Conformed/Fact & Dimension)
-    C -->|Aggregate / SQL & Pandas| D(Gold Zone: Business Marts / BI ready)
-    D -->|Analytics / BI| E[Dashboards / Reports]
+    subgraph OLTP Database
+        A[PostgreSQL Source]
+    end
+
+    subgraph Local Data Lakehouse
+        B[Bronze Zone: Raw Parquet] -->|DuckDB Clean| C[Silver Zone: Conformed/Cleaned]
+        C -->|DuckDB Modeling| D[Gold Zone: Fact & Dimension Marts]
+    end
+
+    subgraph OLAP / BI Analytics
+        E[PostgreSQL Analytics] -->|SQL Queries| F[Metabase Dashboards]
+    end
+
+    A -->|1. Extract / Pandas| B
+    D -->|2. Reverse ETL / Pandas| E
 ```
 
-1. **Source**: Cơ sở dữ liệu PostgreSQL lưu trữ thông tin sản phẩm, đơn hàng, khách hàng.
-2. **Bronze (Raw Zone)**: Dữ liệu được trích xuất nguyên bản từ PostgreSQL sang định dạng file **Parquet** nén đặt tại `data/bronze/`.
-3. **Silver (Cleaned/Conformed)**: Dữ liệu được làm sạch (xử lý null, chuẩn hóa kiểu dữ liệu, định dạng ngày tháng) đặt tại `data/silver/`.
-4. **Gold (Business/Curated)**: Dữ liệu được tổng hợp thành các bảng Fact và Dimension (mô hình hình sao) sẵn sàng cho việc phân tích và trực quan hóa đặt tại `data/gold/`.
-5. **Orchestrator**: **Apache Airflow** điều phối toàn bộ vòng đời của dữ liệu từ trích xuất đến biến đổi.
-6. **Compute Engine**: **DuckDB** được sử dụng để truy vấn hiệu năng cao trực tiếp trên các file Parquet mà không cần thiết lập hệ quản trị cơ sở dữ liệu trung gian.
+1. **PostgreSQL Source (OLTP)**: Lưu trữ các bảng staging giao dịch và hoạt động của Toy Store.
+2. **Bronze Zone (Raw)**: Dữ liệu thô trích xuất nguyên bản từ Postgres sang định dạng file **Parquet** đặt tại `data/bronze/`.
+3. **Silver Zone (Cleaned/Conformed)**: Dữ liệu được chuẩn hóa cột `created_at`, ép kiểu dữ liệu chuẩn, xử lý khoảng trắng và điền giá trị mặc định cho các trường null đặt tại `data/silver/`.
+4. **Gold Zone (Business/Curated)**: Dữ liệu được tổ chức theo mô hình hình sao (Star Schema) gồm Fact, Dimension và các bảng báo cáo tổng hợp (Marts) đặt tại `data/gold/`.
+5. **PostgreSQL Analytics (OLAP)**: Nhận dữ liệu tổng hợp từ tầng Gold phục vụ các truy vấn phân tích (Reverse ETL).
+6. **Metabase**: Kết nối tới PostgreSQL để xây dựng báo cáo và Dashboard.
+7. **Apache Airflow**: Điều phối tự động toàn bộ quy trình chạy tuần tự.
+
+---
+
+## 🛠️ Công nghệ sử dụng (Tech Stack)
+
+* **Orchestrator**: Apache Airflow 3.x (chạy trong Docker Container)
+* **Compute Engine**: DuckDB 1.x (xử lý dữ liệu in-memory hiệu năng cao trực tiếp trên file Parquet)
+* **Database**: PostgreSQL 15 (chứa cả dữ liệu nguồn giao dịch và dữ liệu đích phân tích)
+* **BI Tool**: Metabase
+* **Language & Libraries**: Python 3.12, Pandas, SQLAlchemy, PyArrow
 
 ---
 
@@ -27,82 +51,104 @@ graph TD
 
 ```text
 toy_store_end_to_end/
-├── config/                  # Cấu hình hệ thống & Kết nối database
-├── dags/                    # Nơi chứa các Apache Airflow DAGs
-├── data/                    # Nơi lưu trữ dữ liệu (Data Lakehouse)
+├── dags/                    # Chứa Apache Airflow DAGs để điều phối pipeline
+│   └── toy_store_lakehouse_dag.py
+├── data/                    # Local Lakehouse chứa các tệp Parquet
 │   ├── bronze/              # Dữ liệu thô (Raw Parquet)
-│   ├── silver/              # Dữ liệu đã làm sạch (Cleaned Parquet)
-│   └── gold/                # Dữ liệu tổng hợp (Analytical Parquet)
-├── etls/                    # Các scripts xử lý dữ liệu (Extract, Transform, Load)
-├── logs/                    # Logs hệ thống của Airflow
-├── pipelines/               # Các luồng xử lý hoặc code bổ trợ nâng cao
-├── utils/                   # Các hàm tiện ích (kết nối DB, gửi mail, logging...)
-├── Dockerfile               # Dockerfile cho Airflow & các service
-├── docker-compose.yml       # Cấu hình container chạy Airflow, PostgreSQL
-├── airflow.env              # Biến môi trường cho Apache Airflow
-└── requirements.txt         # Các thư viện Python cần cài đặt
+│   ├── silver/              # Dữ liệu làm sạch (Cleaned Parquet)
+│   └── gold/                # Dữ liệu tổng hợp phân tích (Star Schema Marts)
+├── etls/                    # Scripts xử lý dữ liệu (Extract, Transform, Load)
+│   ├── extract_postgres.py  # Trích xuất dữ liệu: Postgres -> Bronze
+│   ├── transform_duckdb.py  # Biến đổi dữ liệu: Bronze -> Silver -> Gold bằng DuckDB
+│   └── load_gold_to_postgres.py # Nạp dữ liệu: Gold -> Postgres (Reverse ETL)
+├── utils/                   # Các tiện ích kết nối và cấu hình hệ thống
+│   ├── db_connector.py      # Cung cấp SQLAlchemy engine kết nối database
+│   ├── init_postgres_data.py # Khởi tạo bảng staging và nạp dữ liệu mẫu nguồn
+│   └── inspect_db.py        # Tiện ích kiểm tra cấu trúc bảng database
+├── tests/                   # Kiểm thử dữ liệu
+│   └── test_data.py         # Kiểm tra nhanh schema file Parquet bằng DuckDB
+├── Dockerfile               # Cấu hình đóng gói môi trường Airflow
+├── docker-compose.yml       # Điều phối các container Airflow, Postgres, Metabase
+├── airflow.env              # Biến môi trường của Airflow
+└── requirements.txt         # Các thư viện Python phục vụ dự án
 ```
 
 ---
 
-## 🛠️ Hướng dẫn cài đặt và chạy dự án
+## 🚀 Hướng dẫn cài đặt và khởi chạy nhanh
 
-### 1. Yêu cầu hệ thống
-* Python 3.10+
-* PostgreSQL (hoặc chạy qua Docker)
-* Docker & Docker Compose (tùy chọn)
+### 1. Khởi động các dịch vụ bằng Docker Compose
+Dự án được cấu hình để chạy toàn bộ các dịch vụ thông qua Docker Compose. Bạn chỉ cần chạy lệnh sau tại thư mục gốc:
 
-### 2. Khởi tạo môi trường ảo (Virtual Environment)
-Mở terminal tại thư mục gốc của dự án và chạy các lệnh sau:
-
-* **Trên Windows:**
-  ```bash
-  python -m venv venv
-  venv\Scripts\activate
-  ```
-
-* **Trên macOS/Linux:**
-  ```bash
-  python3 -m venv venv
-  source venv/bin/activate
-  ```
-
-### 3. Cài đặt các thư viện Python
-Cài đặt toàn bộ các thư viện cần thiết trong file `requirements.txt`:
 ```bash
-pip install -r requirements.txt
+docker-compose up --build -d
 ```
 
-### 4. Cấu hình biến môi trường
-Tạo hoặc chỉnh sửa các biến kết nối database trong file `airflow.env`:
-```env
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=toy_store
+Lệnh này sẽ khởi chạy 3 container:
+* **PostgreSQL** (`postgres_source_db`): Cổng `5432`
+* **Apache Airflow** (`airflow_app_container`): Cổng `8080`
+* **Metabase** (`metabase_container`): Cổng `3000`
+
+### 2. Khởi tạo dữ liệu mẫu (Seeding)
+Sau khi database PostgreSQL khởi chạy thành công, bạn cần tạo các bảng giao dịch nguồn và nạp dữ liệu thử nghiệm. Chạy script tiện ích sau ở môi trường cục bộ (hoặc chạy trực tiếp bên trong container Airflow):
+
+```bash
+# Cài đặt thư viện Python nếu chạy ở máy local
+pip install -r requirements.txt
+
+# Khởi tạo schema và nạp dữ liệu mẫu
+python utils/init_postgres_data.py
 ```
+
+Bạn có thể kiểm tra xem dữ liệu đã được tạo thành công trên PostgreSQL hay chưa bằng lệnh:
+```bash
+python utils/inspect_db.py
+```
+
+### 3. Vận hành Pipeline dữ liệu
+
+#### Cách A: Chạy tự động qua Airflow Web UI (Khuyên dùng)
+1. Truy cập giao diện quản trị Airflow tại địa chỉ: [http://localhost:8080](http://localhost:8080).
+2. Tìm kiếm DAG có tên là `toy_store_lakehouse_pipeline`.
+3. Bật (Toggle Active) DAG và nhấn nút **Trigger DAG** để bắt đầu chạy pipeline. Các tác vụ sẽ chạy tuần tự: trích xuất -> làm sạch -> tổng hợp -> nạp ngược lại database.
+
+#### Cách B: Chạy thủ công từng bước qua dòng lệnh
+Nếu không muốn sử dụng Airflow, bạn có thể tự kích hoạt quy trình bằng cách chạy lần lượt các script Python sau:
+
+```bash
+# Bước 1: Trích xuất Postgres -> Bronze Parquet
+python etls/extract_postgres.py
+
+# Bước 2: Biến đổi dữ liệu Bronze -> Silver -> Gold qua DuckDB
+python etls/transform_duckdb.py
+
+# Bước 3: Nạp dữ liệu Gold Parquet ngược lại Postgres phục vụ BI
+python etls/load_gold_to_postgres.py
+```
+
+### 4. Kết nối và xây dựng Dashboard trên Metabase
+1. Truy cập Metabase tại địa chỉ: [http://localhost:3000](http://localhost:3000).
+2. Tạo tài khoản quản trị ban đầu.
+3. Thêm mới kết nối Database:
+   * **Database type**: PostgreSQL
+   * **Host**: `postgres-source` (nếu kết nối từ trong mạng Docker) hoặc `localhost` (nếu cấu hình từ bên ngoài)
+   * **Port**: `5432`
+   * **Database name**: `toy_store_db`
+   * **Username**: `postgres`
+   * **Password**: `nguyen`
+4. Truy cập vào cơ sở dữ liệu để xem và vẽ biểu đồ từ các bảng phân tích tầng Gold đã được nạp:
+   * `gold_fact_order_items`
+   * `gold_dim_products`
+   * `gold_dim_website_sessions`
+   * `gold_mart_product_performance`
+   * `gold_mart_session_conversion`
 
 ---
 
-## 🚀 Quy trình chạy Pipeline dữ liệu
+## 🧪 Kiểm thử dữ liệu (Data Testing)
 
-1. **Khởi động Apache Airflow**:
-   Khởi chạy môi trường Airflow độc lập bằng lệnh:
-   ```bash
-   airflow standalone
-   ```
-   *Truy cập giao diện Web UI tại địa chỉ `http://localhost:8080` bằng tài khoản được cấp trên terminal.*
-
-2. **Kích hoạt DAGs**:
-   Bật DAG `postgres_to_lakehouse_dag` trên giao diện Airflow để tự động kích hoạt luồng dữ liệu hoặc trigger chạy thủ công.
-
-3. **Truy vấn phân tích dữ liệu**:
-   Bạn có thể sử dụng DuckDB để viết các phân tích ad-hoc cực nhanh:
-   ```python
-   import duckdb
-   con = duckdb.connect()
-   # Truy vấn trực tiếp từ file Parquet
-   df = con.execute("SELECT * FROM 'data/bronze/orders/*.parquet' LIMIT 5").df()
-   print(df)
-   ```
+Bạn có thể chạy thử tệp kiểm tra nhanh cấu trúc file Parquet thô được trích xuất bằng cách chạy:
+```bash
+python tests/test_data.py
+```
+Tệp tin sẽ hiển thị cấu trúc schema của bảng dữ liệu `orders` ở tầng Bronze cùng bản xem trước 5 bản ghi đầu tiên.
