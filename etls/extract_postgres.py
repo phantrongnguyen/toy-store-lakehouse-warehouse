@@ -25,7 +25,7 @@ def extract_table(table_name: str, target_dir: str = "data/bronze") -> str:
     os.makedirs(output_dir, exist_ok=True)
     output_filepath = os.path.join(output_dir, f"{table_name}.parquet")
     
-    print(f"[EXTRACT] Đang kết nối tới PostgreSQL để trích xuất bảng: '{table_name}'...")
+    print(f"[EXTRACT] Connecting to PostgreSQL to extract table: '{table_name}'...")
     
     try:
         # Sử dụng Pandas đọc dữ liệu từ bảng
@@ -34,19 +34,25 @@ def extract_table(table_name: str, target_dir: str = "data/bronze") -> str:
         # Ghi đè dữ liệu ra file Parquet (nén bằng Snappy mặc định thông qua pyarrow)
         df.to_parquet(output_filepath, index=False, engine='pyarrow')
         
-        print(f"[SUCCESS] Đã trích xuất {len(df)} dòng của bảng '{table_name}' -> '{output_filepath}'")
+        print(f"[SUCCESS] Extracted {len(df)} rows for table '{table_name}' -> '{output_filepath}'")
         return output_filepath
         
     except Exception as e:
-        print(f"[ERROR] Thất bại khi trích xuất bảng '{table_name}': {e}")
+        print(f"[ERROR] Failed to extract table '{table_name}': {e}")
         raise e
 
 if __name__ == "__main__":
-    # Ví dụ chạy thử trích xuất bảng orders và customers
-    # Nhớ thiết lập các biến môi trường trước khi chạy
-    # extract_table("staging_orders")
-    extract_table("staging_products")
-    extract_table("staging_order_item_refunds")
-    extract_table("staging_order_items")
-    extract_table("staging_website_pageviews")
-    extract_table("staging_website_sessions")
+    # Danh sách toàn bộ các bảng staging trong cơ sở dữ liệu Toy Store
+    tables = [
+        "staging_website_sessions",
+        "staging_website_pageviews",
+        "staging_orders",
+        "staging_order_items",
+        "staging_products",
+        "staging_order_item_refunds"
+    ]
+    
+    print("=== STARTING EXTRACT: POSTGRESQL -> BRONZE ===")
+    for table in tables:
+        extract_table(table)
+    print("=== BRONZE EXTRACTION COMPLETED SUCCESSFULLY ===")
