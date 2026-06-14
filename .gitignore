@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# Môi trường ảo (Virtual Environment)
+venv/
+.venv/
+env/
+ENV/
+
+# Dữ liệu cục bộ (Tránh đẩy các file dữ liệu nặng Parquet/CSV lên GitHub)
+data/
+*.parquet
+*.csv
+*.xlsx
+*.db
+*.sqlite
+
+# Cấu hình chứa thông tin nhạy cảm (Credentials / Passwords)
+.env
+airflow.env
+*.env.local
+standalone_admin_password.txt
+
+# Apache Airflow (Bỏ qua Cấu hình tự sinh và Logs)
+logs/
+airflow.cfg
+airflow.db
+webserver_config.py
+
+# IDE / Editor (VS Code, PyCharm, v.v.)
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Hệ điều hành
+.DS_Store
+Thumbs.db

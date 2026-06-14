@@ -1,0 +1,3 @@
+# Tự động xử lý xuống dòng (Line Endings) cho mọi nền tảng (Windows/Linux/macOS)
+# Ngăn chặn các cảnh báo "LF will be replaced by CRLF" khi sử dụng Git trên Windows
+* text=auto
