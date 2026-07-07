@@ -54,16 +54,21 @@ graph TD
 toy_store_end_to_end/
 ├── dags/                    # Chứa Apache Airflow DAGs để điều phối pipeline
 │   └── toy_store_lakehouse_dag.py
+├── data/                    # Thư mục dữ liệu local (được mount vào container)
 ├── etls/                    # Scripts xử lý dữ liệu (Extract, Transform, Load)
 │   ├── extract_postgres.py  # Trích xuất dữ liệu: Postgres -> MinIO Bronze (sử dụng DuckDB)
 │   ├── transform_duckdb.py  # Biến đổi dữ liệu: Bronze -> Silver -> Gold trên MinIO bằng DuckDB
 │   └── load_gold_to_postgres.py # Nạp dữ liệu: MinIO Gold -> Postgres (Reverse ETL với Zero-Downtime)
+├── logs/                    # Chứa log hoạt động của các dịch vụ Airflow
+├── pipelines/               # Thư mục trống dùng cho mở rộng các pipeline khác
 ├── utils/                   # Các tiện ích kết nối và cấu hình hệ thống
 │   ├── db_connector.py      # Cung cấp SQLAlchemy engine kết nối database
 │   ├── init_postgres_data.py # Khởi tạo bảng staging và nạp dữ liệu mẫu nguồn
 │   └── inspect_db.py        # Tiện ích kiểm tra cấu trúc bảng database
 ├── tests/                   # Kiểm thử dữ liệu
 │   └── test_data.py         # Kiểm tra kết nối MinIO và cấu trúc dữ liệu thô
+├── config/                  # Thư mục chứa file cấu hình dự án
+├── venv/                    # Môi trường ảo Python chạy local
 ├── Dockerfile               # Cấu hình đóng gói môi trường Airflow
 ├── docker-compose.yml       # Điều phối các container Airflow, Postgres, MinIO, Metabase
 ├── airflow.env              # Biến môi trường khi chạy các tập lệnh Python ở máy local
